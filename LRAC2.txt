@@ -1,0 +1,2036 @@
+RegisterNetEvent("CarlosLR-AC:cleanareavehy")
+RegisterNetEvent("CarlosLR-AC:cleanareapedsy")
+RegisterNetEvent("CarlosLR-AC:cleanareaentityy")
+RegisterNetEvent("CarlosLR-AC:openmenu")
+RegisterNetEvent("CarlosLR-AC:adminmenuenabley")
+
+local titolo = "~u~LR-AC ~s~Menu"
+local pisellone = PlayerId(-1)
+local pisello = GetPlayerName(pisellone)
+local showblip = false
+local nameabove = false
+local esp = false
+local Enabled = true
+local verif = false
+local noclip = false
+local GodModes = false
+local vanish = false
+local verifcheck = 0
+
+TriggerServerEvent('CarlosLR-AC:adminmenuenable')
+
+AddEventHandler("CarlosLR-AC:adminmenuenabley", function()
+        Enabled = false
+        showblip = false
+        nameabove = false
+        esp = false
+end)
+
+
+
+local LR = {}
+
+LR.debug = false
+
+local function RGBRainbow(frequency)
+        local result = {}
+        local curtime = GetGameTimer() / 2000
+        result.r = math.floor(math.sin(curtime * frequency + 0) * 127 + 128)
+        result.g = math.floor(math.sin(curtime * frequency + 2) * 127 + 128)
+        result.b = math.floor(math.sin(curtime * frequency + 4) * 127 + 128)
+
+        return result
+end
+
+local menus = {}
+local keys = {up = 172, down = 173, left = 174, right = 175, select = 176, back = 177}
+local optionCount = 0
+
+local currentKey = nil
+local currentMenu = nil
+
+local menuWidth = 0.21
+local titleHeight = 0.10
+local titleYOffset = 0.03
+local titleScale = 0.9
+local buttonHeight = 0.040
+local buttonFont = 6
+local buttonScale = 0.470
+local buttonTextXOffset = 0.005
+local buttonTextYOffset = 0.005
+local bytexd = _U('welcome')
+local function debugPrint(text)
+        if LR.debug then
+                Citizen.Trace("[LR] " .. tostring(text))
+        end
+end
+
+local function setMenuProperty(id, property, value)
+        if id and menus[id] then
+                menus[id][property] = value
+                debugPrint(id .. " propiedad del men├║ modificada: { " .. tostring(property) .. ", " .. tostring(value) .. " }")
+        end
+end
+
+local function isMenuVisible(id)
+        if id and menus[id] then
+                return menus[id].visible
+        else
+                return false
+        end
+end
+
+local function setMenuVisible(id, visible, holdCurrent)
+        if id and menus[id] then
+                setMenuProperty(id, "visible", visible)
+
+                if not holdCurrent and menus[id] then
+                        setMenuProperty(id, "currentOption", 1)
+                end
+
+                if visible then
+                        if id ~= currentMenu and isMenuVisible(currentMenu) then
+                                setMenuVisible(currentMenu, false)
+                        end
+
+                        currentMenu = id
+                end
+        end
+end
+
+local function drawText(text, x, y, font, color, scale, center, shadow, alignRight)
+        SetTextColour(color.r, color.g, color.b, color.a)
+        SetTextFont(font)
+        SetTextScale(scale, scale)
+
+        if shadow then
+                SetTextDropShadow(2, 2, 0, 0, 0)
+        end
+
+        if menus[currentMenu] then
+                if center then
+                        SetTextCentre(center)
+                elseif alignRight then
+                        SetTextWrap(menus[currentMenu].x, menus[currentMenu].x + menuWidth - buttonTextXOffset)
+                        SetTextRightJustify(true)
+                end
+        end
+        SetTextEntry("STRING")
+        AddTextComponentString(text)
+        DrawText(x, y)
+end
+
+local function drawRect(x, y, width, height, color)
+        DrawRect(x, y, width, height, color.r, color.g, color.b, color.a)
+end
+
+local function drawTitle()
+        if menus[currentMenu] then
+                local x = menus[currentMenu].x + menuWidth / 2
+                local y = menus[currentMenu].y + titleHeight / 2
+
+                if menus[currentMenu].titleBackgroundSprite then
+                        DrawSprite(
+                                menus[currentMenu].titleBackgroundSprite.dict,
+                                menus[currentMenu].titleBackgroundSprite.name,
+                                x,
+                                y,
+                                menuWidth,
+                                titleHeight,
+                                0.,
+                                255,
+                                255,
+                                255,
+                                255
+                        )
+                else
+                        drawRect(x, y, menuWidth, titleHeight, menus[currentMenu].titleBackgroundColor)
+                end
+
+                drawText(
+                        menus[currentMenu].title,
+                        x,
+                        y - titleHeight / 2 + titleYOffset,
+                        menus[currentMenu].titleFont,
+                        menus[currentMenu].titleColor,
+                        titleScale,
+                        true
+                )
+        end
+end
+
+local function drawSubTitle()
+        if menus[currentMenu] then
+                local x = menus[currentMenu].x + menuWidth / 2
+                local y = menus[currentMenu].y + titleHeight + buttonHeight / 2
+
+                local subTitleColor = {
+                        r = menus[currentMenu].titleBackgroundColor.r,
+                        g = menus[currentMenu].titleBackgroundColor.g,
+                        b = menus[currentMenu].titleBackgroundColor.b,
+                        a = 255
+                }
+
+                drawRect(x, y, menuWidth, buttonHeight, menus[currentMenu].subTitleBackgroundColor)
+                drawText(
+                        menus[currentMenu].subTitle,
+                        menus[currentMenu].x + buttonTextXOffset,
+                        y - buttonHeight / 2 + buttonTextYOffset,
+                        buttonFont,
+                        subTitleColor,
+                        buttonScale,
+                        false
+                )
+
+                if optionCount > menus[currentMenu].maxOptionCount then
+                        drawText(
+                                tostring(menus[currentMenu].currentOption) .. " / " .. tostring(optionCount),
+                                menus[currentMenu].x + menuWidth,
+                                y - buttonHeight / 2 + buttonTextYOffset,
+                                buttonFont,
+                                subTitleColor,
+                                buttonScale,
+                                false,
+                                false,
+                                true
+                        )
+                end
+        end
+end
+
+local function drawButton(text, subText)
+        local x = menus[currentMenu].x + menuWidth / 2
+        local multiplier = nil
+
+        if
+                menus[currentMenu].currentOption <= menus[currentMenu].maxOptionCount and
+                        optionCount <= menus[currentMenu].maxOptionCount
+         then
+                multiplier = optionCount
+        elseif
+                optionCount > menus[currentMenu].currentOption - menus[currentMenu].maxOptionCount and
+                        optionCount <= menus[currentMenu].currentOption
+         then
+                multiplier = optionCount - (menus[currentMenu].currentOption - menus[currentMenu].maxOptionCount)
+        end
+
+        if multiplier then
+                local y = menus[currentMenu].y + titleHeight + buttonHeight + (buttonHeight * multiplier) - buttonHeight / 2
+                local backgroundColor = nil
+                local textColor = nil
+                local subTextColor = nil
+                local shadow = false
+
+                if menus[currentMenu].currentOption == optionCount then
+                        backgroundColor = menus[currentMenu].menuFocusBackgroundColor
+                        textColor = menus[currentMenu].menuFocusTextColor
+                        subTextColor = menus[currentMenu].menuFocusTextColor
+                else
+                        backgroundColor = menus[currentMenu].menuBackgroundColor
+                        textColor = menus[currentMenu].menuTextColor
+                        subTextColor = menus[currentMenu].menuSubTextColor
+                        shadow = true
+                end
+
+                drawRect(x, y, menuWidth, buttonHeight, backgroundColor)
+                drawText(
+                        text,
+                        menus[currentMenu].x + buttonTextXOffset,
+                        y - (buttonHeight / 2) + buttonTextYOffset,
+                        buttonFont,
+                        textColor,
+                        buttonScale,
+                        false,
+                        shadow
+                )
+
+                if subText then
+                        drawText(
+                                subText,
+                                menus[currentMenu].x + buttonTextXOffset,
+                                y - buttonHeight / 2 + buttonTextYOffset,
+                                buttonFont,
+                                subTextColor,
+                                buttonScale,
+                                false,
+                                shadow,
+                                true
+                        )
+                end
+        end
+end
+
+function LR.CreateMenu(id, title)
+        -- Default settings
+        menus[id] = {}
+        menus[id].title = title
+        menus[id].subTitle = bytexd
+
+        menus[id].visible = false
+
+        menus[id].previousMenu = nil
+
+        menus[id].aboutToBeClosed = false
+
+        menus[id].x = 0.75
+        menus[id].y = 0.35
+
+        menus[id].currentOption = 1
+        menus[id].maxOptionCount = 10
+        menus[id].titleFont = 6
+        menus[id].titleColor = {r = 255, g = 255, b = 255, a = 255}
+        Citizen.CreateThread(
+                function()
+                        while true do
+                                Citizen.Wait(0)
+                                local ra = RGBRainbow(1.0)
+                                menus[id].titleBackgroundColor = {r = 0, g = 204, b = 255, a = 105}
+                                menus[id].menuFocusBackgroundColor = {r = 0, g = 204, b = 255, a = 100}
+                        end
+                end)
+        menus[id].titleBackgroundSprite = nil
+
+        menus[id].menuTextColor = {r = 255, g = 255, b = 255, a = 255}
+        menus[id].menuSubTextColor = {r = 189, g = 189, b = 189, a = 255}
+        menus[id].menuFocusTextColor = {r = 255, g = 255, b = 255, a = 255}
+        menus[id].menuBackgroundColor = {r = 0, g = 0, b = 0, a = 100}
+
+        menus[id].subTitleBackgroundColor = {
+                r = menus[id].menuBackgroundColor.r,
+                g = menus[id].menuBackgroundColor.g,
+                b = menus[id].menuBackgroundColor.b,
+                a = 255
+        }
+
+        menus[id].buttonPressedSound = {name = "~h~~r~> ~s~SELECT", set = "HUD_FRONTEND_DEFAULT_SOUNDSET"}
+
+        debugPrint(tostring(id) .. " men├║ creado")
+end
+
+function LR.CreateSubMenu(id, parent, subTitle)
+        if menus[parent] then
+                LR.CreateMenu(id, menus[parent].title)
+
+                if subTitle then
+                        setMenuProperty(id, "subTitle", (subTitle))
+                else
+                        setMenuProperty(id, "subTitle", (menus[parent].subTitle))
+                end
+
+                setMenuProperty(id, "previousMenu", parent)
+
+                setMenuProperty(id, "x", menus[parent].x)
+                setMenuProperty(id, "y", menus[parent].y)
+                setMenuProperty(id, "maxOptionCount", menus[parent].maxOptionCount)
+                setMenuProperty(id, "titleFont", menus[parent].titleFont)
+                setMenuProperty(id, "titleColor", menus[parent].titleColor)
+                setMenuProperty(id, "titleBackgroundColor", menus[parent].titleBackgroundColor)
+                setMenuProperty(id, "titleBackgroundSprite", menus[parent].titleBackgroundSprite)
+                setMenuProperty(id, "menuTextColor", menus[parent].menuTextColor)
+                setMenuProperty(id, "menuSubTextColor", menus[parent].menuSubTextColor)
+                setMenuProperty(id, "menuFocusTextColor", menus[parent].menuFocusTextColor)
+                setMenuProperty(id, "menuFocusBackgroundColor", menus[parent].menuFocusBackgroundColor)
+                setMenuProperty(id, "menuBackgroundColor", menus[parent].menuBackgroundColor)
+                setMenuProperty(id, "subTitleBackgroundColor", menus[parent].subTitleBackgroundColor)
+        else
+                debugPrint("Failed to create " .. tostring(id) .. " submenu: " .. tostring(parent) .. " parent menu doesn't exist")
+        end
+end
+
+function LR.CurrentMenu()
+        return currentMenu
+end
+
+function LR.OpenMenu(id)
+        if id and menus[id] then
+                PlaySoundFrontend(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+                setMenuVisible(id, true)
+
+                if menus[id].titleBackgroundSprite then
+                        RequestStreamedTextureDict(menus[id].titleBackgroundSprite.dict, false)
+                        while not HasStreamedTextureDictLoaded(menus[id].titleBackgroundSprite.dict) do
+                                Citizen.Wait(0)
+                        end
+                end
+
+                debugPrint(tostring(id) .. " men├║ abierto")
+        else
+                debugPrint("Fall├│ al abrir " .. tostring(id) .. " men├║: no existe")
+        end
+end
+
+function LR.IsMenuOpened(id)
+        return isMenuVisible(id)
+end
+
+function LR.CloseMenu()
+        if menus[currentMenu] then
+                if menus[currentMenu].aboutToBeClosed then
+                        menus[currentMenu].aboutToBeClosed = false
+                        setMenuVisible(currentMenu, false)
+                        debugPrint(tostring(currentMenu) .. " Men├║ cerrado")
+                        PlaySoundFrontend(-1, "QUIT", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+                        optionCount = 0
+                        currentMenu = nil
+                        currentKey = nil
+                else
+                        menus[currentMenu].aboutToBeClosed = true
+                        debugPrint(tostring(currentMenu) .. " men├║ a punto de cerrarse")
+                end
+        end
+end
+
+function LR.Button(text, subText)
+        local buttonText = text
+        if subText then
+                buttonText = "{ " .. tostring(buttonText) .. ", " .. tostring(subText) .. " }"
+        end
+
+        if menus[currentMenu] then
+                optionCount = optionCount + 1
+
+                local isCurrent = menus[currentMenu].currentOption == optionCount
+
+                drawButton(text, subText)
+
+                if isCurrent then
+                        if currentKey == keys.select then
+                                PlaySoundFrontend(-1, menus[currentMenu].buttonPressedSound.name, menus[currentMenu].buttonPressedSound.set, true)
+                                debugPrint(buttonText .. " button pressed")
+                                return true
+                        elseif currentKey == keys.left or currentKey == keys.right then
+                                PlaySoundFrontend(-1, "NAV_UP_DOWN", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+                        end
+                end
+
+                return false
+        else
+                debugPrint("Failed to create " .. buttonText .. " button: " .. tostring(currentMenu) .. " menu doesn't exist")
+
+                return false
+        end
+end
+
+function LR.MenuButton(text, id)
+        if menus[id] then
+                if LR.Button(text) then
+                        setMenuVisible(currentMenu, false)
+                        setMenuVisible(id, true, true)
+
+                        return true
+                end
+        else
+                debugPrint("Failed to create " .. tostring(text) .. " menu button: " .. tostring(id) .. " submenu doesn't exist")
+        end
+
+        return false
+end
+
+function LR.CheckBox(text, bool, callback)
+        local checked = "~r~~h~OFF"
+        if bool then
+                checked = "~g~~h~ON"
+        end
+
+        if LR.Button(text, checked) then
+                bool = not bool
+                debugPrint(tostring(text) .. " checkbox changed to " .. tostring(bool))
+                callback(bool)
+
+                return true
+        end
+
+        return false
+end
+
+function TSE(a,b,c,d,e,f,g,h,i,m)
+        TriggerServerEvent(a,b,c,d,e,f,g,h,i,m)
+end
+
+function LR.Display()
+        if isMenuVisible(currentMenu) then
+                if menus[currentMenu].aboutToBeClosed then
+                        LR.CloseMenu()
+                else
+                        ClearAllHelpMessages()
+
+                        drawTitle()
+                        drawSubTitle()
+
+                        currentKey = nil
+
+                        if IsDisabledControlJustPressed(0, keys.down) then
+                                PlaySoundFrontend(-1, "NAV_UP_DOWN", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+
+                                if menus[currentMenu].currentOption < optionCount then
+                                        menus[currentMenu].currentOption = menus[currentMenu].currentOption + 1
+                                else
+                                        menus[currentMenu].currentOption = 1
+                                end
+                        elseif IsDisabledControlJustPressed(0, keys.up) then
+                                PlaySoundFrontend(-1, "NAV_UP_DOWN", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+
+                                if menus[currentMenu].currentOption > 1 then
+                                        menus[currentMenu].currentOption = menus[currentMenu].currentOption - 1
+                                else
+                                        menus[currentMenu].currentOption = optionCount
+                                end
+                        elseif IsDisabledControlJustPressed(0, keys.left) then
+                                currentKey = keys.left
+                        elseif IsDisabledControlJustPressed(0, keys.right) then
+                                currentKey = keys.right
+                        elseif IsDisabledControlJustPressed(0, keys.select) then
+                                currentKey = keys.select
+                        elseif IsDisabledControlJustPressed(0, keys.back) then
+                                if menus[menus[currentMenu].previousMenu] then
+                                        PlaySoundFrontend(-1, "BACK", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+                                        setMenuVisible(menus[currentMenu].previousMenu, true)
+                                else
+                                        LR.CloseMenu()
+                                end
+                        end
+
+                        optionCount = 0
+                end
+        end
+end
+
+function LR.SetMenuWidth(id, width)
+        setMenuProperty(id, "width", width)
+end
+
+function LR.SetMenuX(id, x)
+        setMenuProperty(id, "x", x)
+end
+
+function LR.SetMenuY(id, y)
+        setMenuProperty(id, "y", y)
+end
+
+function LR.SetMenuMaxOptionCountOnScreen(id, count)
+        setMenuProperty(id, "maxOptionCount", count)
+end
+
+function LR.SetTitleColor(id, r, g, b, a)
+        setMenuProperty(id, "titleColor", {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].titleColor.a})
+end
+
+function LR.SetTitleBackgroundColor(id, r, g, b, a)
+        setMenuProperty(
+                id,
+                "titleBackgroundColor",
+                {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].titleBackgroundColor.a}
+        )
+end
+
+function LR.SetTitleBackgroundSprite(id, textureDict, textureName)
+        setMenuProperty(id, "titleBackgroundSprite", {dict = textureDict, name = textureName})
+end
+
+function LR.SetSubTitle(id, text)
+        setMenuProperty(id, "subTitle", (text))
+end
+
+
+function LR.SetMenuBackgroundColor(id, r, g, b, a)
+        setMenuProperty(
+                id,
+                "menuBackgroundColor",
+                {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].menuBackgroundColor.a}
+        )
+end
+
+function LR.SetMenuTextColor(id, r, g, b, a)
+        setMenuProperty(id, "menuTextColor", {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].menuTextColor.a})
+end
+
+function LR.SetMenuSubTextColor(id, r, g, b, a)
+        setMenuProperty(id, "menuSubTextColor", {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].menuSubTextColor.a})
+end
+
+function LR.SetMenuFocusColor(id, r, g, b, a)
+        setMenuProperty(id, "menuFocusColor", {["r"] = r, ["g"] = g, ["b"] = b, ["a"] = a or menus[id].menuFocusColor.a})
+end
+
+function LR.SetMenuButtonPressedSound(id, name, set)
+        setMenuProperty(id, "buttonPressedSound", {["name"] = name, ["set"] = set})
+end
+function RespawnPed(ped, coords, heading)
+        SetEntityCoordsNoOffset(ped, coords.x, coords.y, coords.z, false, false, false, true)
+        NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, heading, true, false)
+        SetPlayerInvincible(ped, false)
+        ClearPedBloodDamage(ped)
+end
+function KeyboardInput(TextEntry, ExampleText, MaxStringLength)
+        AddTextEntry("FMMC_KEY_TIP1", TextEntry .. ":")
+        DisplayOnscreenKeyboard(1, "FMMC_KEY_TIP1", "", ExampleText, "", "", "", MaxStringLength)
+        blockinput = true
+
+        while UpdateOnscreenKeyboard() ~= 1 and UpdateOnscreenKeyboard() ~= 2 do
+                Citizen.Wait(0)
+        end
+
+        if UpdateOnscreenKeyboard() ~= 2 then
+                AddTextEntry("FMMC_KEY_TIP1", "")
+                local result = GetOnscreenKeyboardResult()
+                Citizen.Wait(500)
+                blockinput = false
+                return result
+        else
+                AddTextEntry("FMMC_KEY_TIP1", "")
+                Citizen.Wait(500)
+                blockinput = false
+                return nil
+        end
+end
+
+
+function DrawText3D(x, y, z, text, r, g, b)
+        SetDrawOrigin(x, y, z, 0)
+        SetTextFont(2)
+        SetTextProportional(0)
+        SetTextScale(0.0, 0.20)
+        SetTextColour(r, g, b, 255)
+        SetTextDropshadow(0, 0, 0, 0, 255)
+        SetTextEdge(2, 0, 0, 0, 150)
+        SetTextDropShadow()
+        SetTextOutline()
+        SetTextEntry("STRING")
+        SetTextCentre(1)
+        AddTextComponentString(text)
+        DrawText(0.0, 0.0)
+        ClearDrawOrigin()
+end
+
+function math.round(num, numDecimalPlaces)
+        return tonumber(string.format("%." .. (numDecimalPlaces or 0) .. "f", num))
+end
+
+local function RGBRainbow(frequency)
+        local result = {}
+        local curtime = GetGameTimer() / 1000
+
+        result.r = math.floor(math.sin(curtime * frequency + 0) * 127 + 128)
+        result.g = math.floor(math.sin(curtime * frequency + 2) * 127 + 128)
+        result.b = math.floor(math.sin(curtime * frequency + 4) * 127 + 128)
+
+        return result
+end
+
+local function notify(text, param)
+        SetNotificationTextEntry("STRING")
+        AddTextComponentString(text)
+        DrawNotification(param, false)
+end
+
+local LynxIcS = "LynxX"
+local LynxIcZ = titolo
+local sMX = "SelfMenu"
+local sMXS = "Self Menu"
+local TRPM = "TeleportMenu"
+local advm = "AdvM"
+local VMS = "VehicleMenu"
+local OPMS = "OnlinePlayerMenu"
+local poms = "PlayerOptionsMenu"
+local crds = "Credits"
+local MSTC = "MiscTriggers"
+local espa = "ESPMenu"
+
+local function DrawTxt(text, x, y)
+        SetTextFont(0)
+        SetTextProportional(1)
+        SetTextScale(0.0, 0.4)
+        SetTextDropshadow(1, 0, 0, 0, 255)
+        SetTextEdge(1, 0, 0, 0, 255)
+        SetTextDropShadow()
+        SetTextOutline()
+        SetTextEntry("STRING")
+        AddTextComponentString(text)
+        DrawText(x, y)
+end
+
+function RequestModelSync(mod)
+    local model = GetHashKey(mod)
+    RequestModel(model)
+    while not HasModelLoaded(model) do
+        RequestModel(model)
+          Citizen.Wait(0)
+    end
+end
+
+
+
+
+local function teleporttocoords()
+        local pizdax = KeyboardInput("Introduzca X pos", "", 100)
+        local pizday = KeyboardInput("Introduzca Y pos", "", 100)
+        local pizdaz = KeyboardInput("Introduzca Z pos", "", 100)
+        if pizdax ~= "" and pizday ~= "" and pizdaz ~= "" then
+                        if IsPedInAnyVehicle(GetPlayerPed(-1), 0) and (GetPedInVehicleSeat(GetVehiclePedIsIn(GetPlayerPed(-1), 0), -1) == GetPlayerPed(-1)) then
+                                        entity = GetVehiclePedIsIn(GetPlayerPed(-1), 0)
+                        else
+                                        entity = GetPlayerPed(-1)
+                        end
+                        if entity then
+                                SetEntityCoords(entity, pizdax + 0.5, pizday + 0.5, pizdaz + 0.5, 1, 0, 0, 1)
+                                notify("~g~TP a las coords!", false)
+                        end
+        else
+        notify("~b~Coords inv├ílidos!", true)
+        end
+end
+
+local function TeleportToWaypoint()
+        if DoesBlipExist(GetFirstBlipInfoId(8)) then
+                local blipIterator = GetBlipInfoIdIterator(8)
+                local blip = GetFirstBlipInfoId(8, blipIterator)
+                WaypointCoords = Citizen.InvokeNative(0xFA7C7F0AADF25D09, blip, Citizen.ResultAsVector())
+                wp = true
+        else
+                notify("~b~No waypoint!", true)
+        end
+
+        local zHeigt = 0.0
+        height = 1000.0
+        while wp do
+                Citizen.Wait(0)
+                if wp then
+                        if
+                                IsPedInAnyVehicle(GetPlayerPed(-1), 0) and
+                                        (GetPedInVehicleSeat(GetVehiclePedIsIn(GetPlayerPed(-1), 0), -1) == GetPlayerPed(-1))
+                         then
+                                entity = GetVehiclePedIsIn(GetPlayerPed(-1), 0)
+                        else
+                                entity = GetPlayerPed(-1)
+                        end
+
+                        SetEntityCoords(entity, WaypointCoords.x, WaypointCoords.y, height)
+                        FreezeEntityPosition(entity, true)
+                        local Pos = GetEntityCoords(entity, true)
+
+                        if zHeigt == 0.0 then
+                                height = height - 25.0
+                                SetEntityCoords(entity, Pos.x, Pos.y, height)
+                                bool, zHeigt = GetGroundZFor_3dCoord(Pos.x, Pos.y, Pos.z, 0)
+                        else
+                                SetEntityCoords(entity, Pos.x, Pos.y, zHeigt)
+                                FreezeEntityPosition(entity, false)
+                                wp = false
+                                height = 1000.0
+                                zHeigt = 0.0
+                                notify("~g~TP al waypoint!", false)
+                                break
+                        end
+                end
+        end
+end
+local function spawnvehicle()
+        local ModelName = KeyboardInput("Ingrese el nombre de spawn del veh├¡culo", "", 100)
+        if ModelName and IsModelValid(ModelName) and IsModelAVehicle(ModelName) then
+                RequestModel(ModelName)
+                while not HasModelLoaded(ModelName) do
+                        Citizen.Wait(0)
+                end
+                local veh = CreateVehicle(GetHashKey(ModelName), GetEntityCoords(PlayerPedId()), GetEntityHeading(PlayerPedId()), true, true)
+                SetPedIntoVehicle(PlayerPedId(), veh, -1)
+        else
+                notify("~b~~h~El modelo no es v├ílido!", true)
+        end
+end
+local function eliminarcoche(entity)
+        DeleteVehicle(entity)
+        DeleteEntity(entity)
+end
+local function repairvehicle()
+        SetVehicleFixed(GetVehiclePedIsIn(GetPlayerPed(-1), false))
+        SetVehicleDirtLevel(GetVehiclePedIsIn(GetPlayerPed(-1), false), 0.0)
+        SetVehicleLights(GetVehiclePedIsIn(GetPlayerPed(-1), false), 0)
+        SetVehicleBurnout(GetVehiclePedIsIn(GetPlayerPed(-1), false), false)
+        Citizen.InvokeNative(0x1FD09E7390A74D54, GetVehiclePedIsIn(GetPlayerPed(-1), false), 0)
+        SetVehicleUndriveable(vehicle,false)
+end
+
+function RequestControl(entity)
+        local Waiting = 0
+        NetworkRequestControlOfEntity(entity)
+        while not NetworkHasControlOfEntity(entity) do
+                Waiting = Waiting + 100
+                Citizen.Wait(100)
+                if Waiting > 5000 then
+                        notify("Colgado durante 5 segundos, matando para evitar problemas...", true)
+                end
+        end
+end
+
+function getEntity(player)
+        local result, entity = GetEntityPlayerIsFreeAimingAt(player, Citizen.ReturnResultAnyway())
+        return entity
+end
+
+function GetInputMode()
+        return Citizen.InvokeNative(0xA571D46727E2B718, 2) and "MouseAndKeyboard" or "GamePad"
+end
+
+
+
+function DrawSpecialText(m_text, showtime)
+        SetTextEntry_2("STRING")
+        AddTextComponentString(m_text)
+        DrawSubtitleTimed(showtime, 1)
+end
+if Config.AntiCarDetroy then
+        Citizen.CreateThread(function()
+                while true do
+                        Citizen.Wait(15000)
+                        for theveh in EnumerateVehicles() do
+                        if GetEntityHealth(theveh) == 0 then
+                                SetEntityAsMissionEntity(theveh, false, false)
+                                DeleteEntity(theveh)
+                        end
+                                end
+                end
+        end)
+end
+
+local entityEnumerator = {
+        __gc = function(enum)
+                if enum.destructor and enum.handle then
+                        enum.destructor(enum.handle)
+                end
+                enum.destructor = nil
+                enum.handle = nil
+        end
+}
+
+function EnumerateEntities(initFunc, moveFunc, disposeFunc)
+        return coroutine.wrap(function()
+                local iter, id = initFunc()
+                if not id or id == 0 then
+                        disposeFunc(iter)
+                        return
+                end
+
+                local enum = {handle = iter, destructor = disposeFunc}
+                setmetatable(enum, entityEnumerator)
+
+                local next = true
+                repeat
+                        coroutine.yield(id)
+                        next, id = moveFunc(iter)
+                until not next
+
+                enum.destructor, enum.handle = nil, nil
+                disposeFunc(iter)
+        end)
+end
+local bn = {
+        "WEAPON_KNIFE", "WEAPON_BAT", "WEAPON_PISTOL",
+        "WEAPON_COMBATPISTOL", "WEAPON_APPISTOL", "WEAPON_PISTOL50", "WEAPON_SNSPISTOL", "WEAPON_HEAVYPISTOL",
+        "WEAPON_VINTAGEPISTOL", "WEAPON_REVOLVER",
+        "WEAPON_SMG", "WEAPON_COMBATMG", "WEAPON_COMBATPDW"
+}
+function EnumeratePeds()
+                return EnumerateEntities(FindFirstPed, FindNextPed, EndFindPed)
+end
+
+function EnumerateVehicles()
+                return EnumerateEntities(FindFirstVehicle, FindNextVehicle, EndFindVehicle)
+end
+
+function EnumerateObjects()
+        return EnumerateEntities(FindFirstObject, FindNextObject, EndFindObject)
+end
+
+function RotationToDirection(rotation)
+        local retz = rotation.z * 0.0174532924
+        local retx = rotation.x * 0.0174532924
+        local absx = math.abs(math.cos(retx))
+
+        return vector3(-math.sin(retz) * absx, math.cos(retz) * absx, math.sin(retx))
+end
+
+function OscillateEntity(entity, entityCoords, position, angleFreq, dampRatio)
+        if entity ~= 0 and entity ~= nil then
+                local direction = ((position - entityCoords) * (angleFreq * angleFreq)) - (2.0 * angleFreq * dampRatio * GetEntityVelocity(entity))
+                ApplyForceToEntity(entity, 3, direction.x, direction.y, direction.z + 0.1, 0.0, 0.0, 0.0, false, false, true, true, false, true)
+        end
+end
+
+Citizen.CreateThread(
+        function()
+                while Enabled do
+                        Citizen.Wait(0)
+
+                        DisplayRadar(true)
+                        if DeleteGun then
+                local cB = getEntity(PlayerId(-1))
+                if IsPedInAnyVehicle(GetPlayerPed(-1), true) == false then
+                    notify(
+                        '~g~Guantelete Activado!~n~~w~Usa esta ~b~Pistola~n~~b~ y ~w~apunta ~b~al objetivo ~w~para eliminar!'
+                    )
+                    GiveWeaponToPed(GetPlayerPed(-1), GetHashKey('WEAPON_PISTOL'), 999999, false, true)
+                    SetPedAmmo(GetPlayerPed(-1), GetHashKey('WEAPON_PISTOL'), 999999)
+                    if GetSelectedPedWeapon(GetPlayerPed(-1)) == GetHashKey('WEAPON_PISTOL') then
+                        if IsPlayerFreeAiming(PlayerId(-1)) then
+                            if IsEntityAPed(cB) then
+                                if IsPedInAnyVehicle(cB, true) then
+                                    if IsControlJustReleased(1, 142) then
+                                        SetEntityAsMissionEntity(GetVehiclePedIsIn(cB, true), 1, 1)
+                                        DeleteEntity(GetVehiclePedIsIn(cB, true))
+                                        SetEntityAsMissionEntity(cB, 1, 1)
+                                        DeleteEntity(cB)
+                                        notify('~g~Eliminado!')
+                                    end
+                                else
+                                    if IsControlJustReleased(1, 142) then
+                                        SetEntityAsMissionEntity(cB, 1, 1)
+                                        DeleteEntity(cB)
+                                        notify('~g~Eliminado!')
+                                    end
+                                end
+                            else
+                                if IsControlJustReleased(1, 142) then
+                                    SetEntityAsMissionEntity(cB, 1, 1)
+                                    DeleteEntity(cB)
+                                    notify('~g~Eliminado!')
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+
+
+if esp then
+        for i=1,255 do
+          if  ((NetworkIsPlayerActive( i )) and GetPlayerPed( i ) ~= GetPlayerPed( -1 )) then
+                local ra = {r = 255, g = 0, b = 255, a = 255}
+                local pPed = GetPlayerPed(i)
+                local cx, cy, cz = table.unpack(GetEntityCoords(PlayerPedId()))
+                local x, y, z = table.unpack(GetEntityCoords(pPed))
+                local disPlayerNames = 130
+                local disPlayerNamesz = 999999
+                distance = math.floor(GetDistanceBetweenCoords(cx,  cy,  cz,  x,  y,  z,  true))
+                  if nameabove then
+                          if ((distance < disPlayerNames)) then
+                                if NetworkIsPlayerTalking( i ) then
+                                  DrawText3D(x, y, z+1.2, GetPlayerServerId(i).."  |  "..GetPlayerName(i), ra.r,ra.g,ra.b)
+                                else
+                                  DrawText3D(x, y, z+1.2, GetPlayerServerId(i).."  |  "..GetPlayerName(i), 255,255,255)
+                                end
+                          end
+                  end
+                local message =
+                "Nombre: " ..
+                GetPlayerName(i) ..
+                "\nServidor ID: " ..
+                GetPlayerServerId(i) ..
+                "\nJugador ID: " .. i .. "\nDistancia: " .. math.round(GetDistanceBetweenCoords(cx, cy, cz, x, y, z, true), 1)
+                if IsPedInAnyVehicle(pPed, true) then
+                                 local VehName = GetLabelText(GetDisplayNameFromVehicleModel(GetEntityModel(GetVehiclePedIsUsing(pPed))))
+                  message = message .. "\nCoche: " .. VehName
+                end
+                if ((distance < disPlayerNamesz)) then
+                if espinfo and esp then
+                  DrawText3D(x, y, z - 1.0, message, ra.r, ra.g, ra.b)
+                end
+                if espbox and esp then
+                  LineOneBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, -0.9)
+                  LineOneEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, -0.9)
+                  LineTwoBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, -0.9)
+                  LineTwoEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, -0.9)
+                  LineThreeBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, -0.9)
+                  LineThreeEnd = GetOffsetFromEntityInWorldCoords(pPed, -0.3, 0.3, -0.9)
+                  LineFourBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, -0.9)
+
+                  TLineOneBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, 0.8)
+                  TLineOneEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, 0.8)
+                  TLineTwoBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, 0.8)
+                  TLineTwoEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, 0.8)
+                  TLineThreeBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, 0.8)
+                  TLineThreeEnd = GetOffsetFromEntityInWorldCoords(pPed, -0.3, 0.3, 0.8)
+                  TLineFourBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, 0.8)
+
+                  ConnectorOneBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, 0.3, 0.8)
+                  ConnectorOneEnd = GetOffsetFromEntityInWorldCoords(pPed, -0.3, 0.3, -0.9)
+                  ConnectorTwoBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, 0.8)
+                  ConnectorTwoEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, 0.3, -0.9)
+                  ConnectorThreeBegin = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, 0.8)
+                  ConnectorThreeEnd = GetOffsetFromEntityInWorldCoords(pPed, -0.3, -0.3, -0.9)
+                  ConnectorFourBegin = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, 0.8)
+                  ConnectorFourEnd = GetOffsetFromEntityInWorldCoords(pPed, 0.3, -0.3, -0.9)
+
+                  DrawLine(
+                  LineOneBegin.x,
+                  LineOneBegin.y,
+                  LineOneBegin.z,
+                  LineOneEnd.x,
+                  LineOneEnd.y,
+                  LineOneEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  LineTwoBegin.x,
+                  LineTwoBegin.y,
+                  LineTwoBegin.z,
+                  LineTwoEnd.x,
+                  LineTwoEnd.y,
+                  LineTwoEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  LineThreeBegin.x,
+                  LineThreeBegin.y,
+                  LineThreeBegin.z,
+                  LineThreeEnd.x,
+                  LineThreeEnd.y,
+                  LineThreeEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  LineThreeEnd.x,
+                  LineThreeEnd.y,
+                  LineThreeEnd.z,
+                  LineFourBegin.x,
+                  LineFourBegin.y,
+                  LineFourBegin.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  TLineOneBegin.x,
+                  TLineOneBegin.y,
+                  TLineOneBegin.z,
+                  TLineOneEnd.x,
+                  TLineOneEnd.y,
+                  TLineOneEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  TLineTwoBegin.x,
+                  TLineTwoBegin.y,
+                  TLineTwoBegin.z,
+                  TLineTwoEnd.x,
+                  TLineTwoEnd.y,
+                  TLineTwoEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  TLineThreeBegin.x,
+                  TLineThreeBegin.y,
+                  TLineThreeBegin.z,
+                  TLineThreeEnd.x,
+                  TLineThreeEnd.y,
+                  TLineThreeEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  TLineThreeEnd.x,
+                  TLineThreeEnd.y,
+                  TLineThreeEnd.z,
+                  TLineFourBegin.x,
+                  TLineFourBegin.y,
+                  TLineFourBegin.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  ConnectorOneBegin.x,
+                  ConnectorOneBegin.y,
+                  ConnectorOneBegin.z,
+                  ConnectorOneEnd.x,
+                  ConnectorOneEnd.y,
+                  ConnectorOneEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  ConnectorTwoBegin.x,
+                  ConnectorTwoBegin.y,
+                  ConnectorTwoBegin.z,
+                  ConnectorTwoEnd.x,
+                  ConnectorTwoEnd.y,
+                  ConnectorTwoEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  ConnectorThreeBegin.x,
+                  ConnectorThreeBegin.y,
+                  ConnectorThreeBegin.z,
+                  ConnectorThreeEnd.x,
+                  ConnectorThreeEnd.y,
+                  ConnectorThreeEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                  DrawLine(
+                  ConnectorFourBegin.x,
+                  ConnectorFourBegin.y,
+                  ConnectorFourBegin.z,
+                  ConnectorFourEnd.x,
+                  ConnectorFourEnd.y,
+                  ConnectorFourEnd.z,
+                  ra.r,
+                  ra.g,
+                  ra.b,
+                  255
+                  )
+                end
+                if esplines and esp then
+                  DrawLine(cx, cy, cz, x, y, z, ra.r, ra.g, ra.b, 255)
+                end
+          end
+        end
+  end
+  end
+
+
+if showCoords then
+        x, y, z = table.unpack(GetEntityCoords(GetPlayerPed(-1), true))
+        roundx = tonumber(string.format("%.2f", x))
+        roundy = tonumber(string.format("%.2f", y))
+        roundz = tonumber(string.format("%.2f", z))
+
+        DrawTxt("~r~X:~s~ "..roundx, 0.05, 0.00)
+        DrawTxt("~r~Y:~s~ "..roundy, 0.11, 0.00)
+        DrawTxt("~r~Z:~s~ "..roundz, 0.17, 0.00)
+end
+
+if Noclip then
+        local ped = GetPlayerPed(-1)
+        local x,y,z = getPosition()
+        local dx,dy,dz = getCamDirection()
+        local speed = 3
+
+        SetEntityVelocity(ped, 0.0001, 0.0001, 0.0001)
+
+        if IsControlPressed(0,32) then
+          x = x+speed*dx
+          y = y+speed*dy
+          z = z+speed*dz
+        end
+
+        if IsControlPressed(0,269) then
+          x = x-speed*dx
+          y = y-speed*dy
+          z = z-speed*dz
+        end
+
+        SetEntityCoordsNoOffset(ped,x,y,z,true,true,true)
+end
+if VehGod and IsPedInAnyVehicle(PlayerPedId(), true) then
+        SetEntityInvincible(GetVehiclePedIsUsing(PlayerPedId()), true)
+end
+if GodModes then
+        SetEntityInvincible(GetPlayerPed(-1), true)
+        SetPlayerInvincible(PlayerId(), true)
+        SetPedCanRagdoll(GetPlayerPed(-1), false)
+        ClearPedBloodDamage(GetPlayerPed(-1))
+        ResetPedVisibleDamage(GetPlayerPed(-1))
+        ClearPedLastWeaponDamage(GetPlayerPed(-1))
+        SetEntityProofs(GetPlayerPed(-1), true, true, true, true, true, true, true, true)
+        SetEntityOnlyDamagedByPlayer(GetPlayerPed(-1), false)
+        SetEntityCanBeDamaged(GetPlayerPed(-1), false)
+else
+        SetEntityInvincible(GetPlayerPed(-1), false)
+        SetPlayerInvincible(PlayerId(), false)
+        SetPedCanRagdoll(GetPlayerPed(-1), true)
+        ClearPedBloodDamage(GetPlayerPed(-1))
+        ResetPedVisibleDamage(GetPlayerPed(-1))
+        ClearPedLastWeaponDamage(GetPlayerPed(-1))
+        SetEntityProofs(GetPlayerPed(-1), false, false, false, false, false, false, false, false)
+        SetEntityOnlyDamagedByPlayer(GetPlayerPed(-1), false)
+        SetEntityCanBeDamaged(GetPlayerPed(-1), true)
+end
+end
+end)
+
+RegisterNetEvent('CarlosLR-AC:nocliped')
+AddEventHandler('CarlosLR-AC:nocliped',function()
+    noclip = not noclip
+    local ped = GetPlayerPed(-1)
+    if noclip then
+        SetEntityInvincible(ped, true)
+        SetEntityVisible(ped, false, false)
+    else
+        SetEntityInvincible(ped, false)
+        SetEntityVisible(ped, true, false)
+    end
+    if noclip == true then
+        notify("~w~Has ~g~activado ~w~el noclip.", true)
+    else
+        notify("~w~Has ~r~desactivado ~w~el noclip.", true)
+    end
+end)
+RegisterNetEvent('CarlosLR-AC:vanished')
+AddEventHandler('CarlosLR-AC:vanished',function()
+    vanish = not vanish
+    local ped = GetPlayerPed(-1)
+    SetEntityVisible(ped, not vanish, false)
+    if vanish == true then
+        notify("~w~Has ~g~activado ~w~el vanish.", true)
+    else
+        notify("~w~Has ~r~desactivado ~w~el vanish.", true)
+    end
+end)
+function getCamDirection()
+        local heading = GetGameplayCamRelativeHeading()+GetEntityHeading(GetPlayerPed(-1))
+        local pitch = GetGameplayCamRelativePitch()
+
+        local x = -math.sin(heading*math.pi/180.0)
+        local y = math.cos(heading*math.pi/180.0)
+        local z = math.sin(pitch*math.pi/180.0)
+
+        local len = math.sqrt(x*x+y*y+z*z)
+        if len ~= 0 then
+          x = x/len
+          y = y/len
+          z = z/len
+        end
+
+        return x,y,z
+      end
+function getPosition()
+        local x,y,z = table.unpack(GetEntityCoords(GetPlayerPed(-1),true))
+        return x,y,z
+end
+
+local SelectedName = ""
+local SelectedPlayerSid = 0
+local lastEnabled = false
+local savedPlayers = {}
+local _SpectateCoords = false
+
+local _cgpc = 0
+local _getCoords = {}
+RegisterNetEvent("_SendPlayers")
+AddEventHandler("_SendPlayers", function(d)
+        savedPlayers = d
+end)
+RegisterNetEvent("_SendPos")
+AddEventHandler("_SendPos", function(d, n)
+        _getCoords[tostring(n)] = {recv = true, coords = d}
+end)
+local function GetPlayerCoords(psid, cb)
+        _cgpc = _cgpc + 1
+        local me = _cgpc
+        TriggerServerEvent("_GetCoords", psid, me)
+        while _getCoords[tostring(me)] == nil do
+                Wait(10)
+        end
+        local c = _getCoords[tostring(me)].coords
+        _getCoords[tostring(me)] = nill
+        cb(c)
+end
+
+local Spectating = false
+local cam = nil
+local polarAngleDeg = 0
+local azimuthAngleDeg = 90
+local radius = -3.5
+local LastPosition = nil
+local function polar3DToWorld3D(entityPosition, radius, polarAngleDeg, azimuthAngleDeg)
+        local polarAngleRad = polarAngleDeg * math.pi / 180.0
+        local azimuthAngleRad = azimuthAngleDeg * math.pi / 180.0
+        local pos = {
+            x = entityPosition.x + radius * (math.sin(azimuthAngleRad) * math.cos(polarAngleRad)),
+            y = entityPosition.y - radius * (math.sin(azimuthAngleRad) * math.sin(polarAngleRad)),
+            z = entityPosition.z - radius * math.cos(azimuthAngleRad)
+        }
+        return pos
+    end
+local function ResetNormalCamera()
+    local playerPed = PlayerPedId()
+    SetCamActive(cam, false)
+    RenderScriptCams(false, false, 0, true, true)
+    SetEntityCollision(playerPed, true, true)
+    SetEntityVisible(playerPed, true)
+    SetEntityCoords(playerPed, LastPosition.x, LastPosition.y, LastPosition.z)
+end
+function SpectatePlayer(_targetPed, serverId)
+        local playerPed = PlayerPedId()
+        Spectating = not Spectating
+        if Spectating then
+                LastPosition = GetEntityCoords(playerPed)
+                if not DoesCamExist(cam) then cam = CreateCam('DEFAULT_SCRIPTED_CAMERA', true) end
+                SetCamActive(cam, true)
+                RenderScriptCams(true, false, 0, true, true)
+
+                Citizen.CreateThread(function()
+                        GetPlayerCoords(serverId, function(coords)
+                                if coords ~= nil then
+                                        SetEntityCollision(playerPed, false, false)
+                                        SetEntityVisible(playerPed, false)
+                                        SetEntityCoords(playerPed, coords.x, coords.y, coords.z + 10)
+                                        SetCamCoord(cam, coords.x, coords.y, coords.z)
+                                        local targetPed = nil
+                                        while Spectating do
+                                                Wait(0)
+                                                playerPed = PlayerPedId()
+                                                targetPed = GetPlayerPed(GetPlayerFromServerId(serverId))
+                                                local coords = GetEntityCoords(targetPed)
+                                                local dist = #(coords - GetEntityCoords(playerPed))
+                                                if dist <= 5 then
+                                                        Wait(500)
+                                                        GetPlayerCoords(serverId, function(c)
+                                                                coords = c
+                                                        end)
+                                                else
+                                                        NetworkSetInSpectatorMode(true, targetPed)
+                                                end
+                                                for _, player in ipairs(GetActivePlayers()) do if player ~= PlayerId() then SetEntityNoCollisionEntity(playerPed, GetPlayerPed(player), true) SetEntityVisible(playerPed, false) end end
+                                                if IsControlPressed(2, 241) then radius = radius + 2.0 end
+                                                if IsControlPressed(2, 242) then radius = radius - 2.0 end
+                                                if radius > -1 then radius = -1 end
+                                                local xMagnitude = GetDisabledControlNormal(0, 1)
+                                                local yMagnitude = GetDisabledControlNormal(0, 2)
+                                                polarAngleDeg = polarAngleDeg + xMagnitude * 10
+                                                if polarAngleDeg >= 360 then polarAngleDeg = 0 end
+                                                azimuthAngleDeg = azimuthAngleDeg + yMagnitude * 10
+                                                if azimuthAngleDeg >= 360 then azimuthAngleDeg = 0 end
+                                                local nextCamLocation = polar3DToWorld3D(coords, radius, polarAngleDeg, azimuthAngleDeg)
+                                                SetCamCoord(cam, nextCamLocation.x, nextCamLocation.y, nextCamLocation.z)
+                                                PointCamAtEntity(cam, targetPed)
+                                                SetEntityCoords(playerPed, coords.x, coords.y, coords.z + 10)
+                                        end
+                                        NetworkSetInSpectatorMode(false, targetPed)
+                                        ResetNormalCamera()
+                                end
+                        end)
+                end)
+        end
+end
+
+Citizen.CreateThread(function()
+        local lastPos = nil
+        while true do
+            Wait(10000)
+            TriggerServerEvent("_UpdateTs")
+        end
+end)
+
+Citizen.CreateThread(function()
+        local lastPos = nil
+        while true do
+                Wait(2000)
+                local pos = GetEntityCoords(GetPlayerPed(-1), true)
+                if lastPos == nil or (#(lastPos - pos) > 2) then
+                        lastPos = pos
+                        TriggerServerEvent("_UpdatePos", pos)
+                end
+        end
+end)
+
+function IsLocked(ped)
+        local hash = GetEntityModel(ped)
+        for _, v in pairs(Config.PEDBLACK) do
+                if GetHashKey(v) == hash then
+                        return true
+                end
+        end
+        return false
+end
+if Config.AntiPedAttack then
+        Citizen.CreateThread(function()
+                local lastPos = nill
+        while true do
+                Wait(1000)
+                local handle, ped = FindFirstPed()
+                local finished = false
+                repeat
+                        Citizen.Wait(20)
+                        if not IsPedAPlayer(ped) then
+                                if(IsPedArmed(ped) or IsPedInMeleeCombat(ped) or IsPedInCombat(ped) or IsLocked(ped)) then
+                                        RemoveAllPedWeapons(ped, true)
+                                        SetEntityInvincible(ped, false)
+                                        SetPedMaxHealth(ped, 200)
+                                        ApplyDamageToPed(ped, 10000, false)
+                                        DeleteEntity(ped)
+                                end
+                        end
+                        finished, ped = FindNextPed(handle)
+                until not finished
+                EndFindPed(handle)
+        end
+        end)
+end
+
+AntiCheat = true
+
+if Config.PlayerProtection then
+        Citizen.CreateThread(function()
+                while true do
+                        local Player = GetPlayerPed(-1)
+                        SetExplosiveAmmoThisFrame(Player, 0)
+                        SetExplosiveMeleeThisFrame(Player, 0)
+                        SetFireAmmoThisFrame(Player, 0)
+                        SetEntityProofs(GetPlayerPed(-1), false, true, true, false, false, false, false, false)
+                        Citizen.Wait(0)
+                end
+        end)
+end
+--[[ BLACKLISTED CAR CHECK ]]--
+Citizen.CreateThread(function()
+        while true do
+                local sleep = 5000
+                if (AntiCheat == true)then
+                        if IsPedInAnyVehicle(GetPlayerPed(-1)) then
+                                sleep = 5
+                                v = GetVehiclePedIsIn(playerPed, false)
+                        end
+                        playerPed = GetPlayerPed(-1)
+
+                        if playerPed and v then
+                                if GetPedInVehicleSeat(v, -1) == playerPed then
+                                        sleep = 5
+                                        checkCar(GetVehiclePedIsIn(playerPed, false))
+                                end
+                        end
+                end
+                Wait(sleep)
+        end
+end)
+--[[ BLACKLISTED WEAPON CHECK ]]--
+Citizen.CreateThread(function()
+        while true do
+                local sleep = 5000
+                if (AntiCheat == true)then
+                        for _,theWeapon in ipairs(Config.WeaponBL) do
+                                sleep = 100
+                                local pedi = PlayerPedId()
+                                if HasPedGotWeapon(pedi,GetHashKey(theWeapon),false) == 1 then
+                                        sleep = 100
+                                        RemoveAllPedWeapons(pedi,false)
+                                        TriggerServerEvent('CarlosLR-AC:armasprohibidas', theWeapon)
+                                end
+                        end
+                end
+                Wait(sleep)
+        end
+end)
+--[[ BLACKLISTED OBJECT CHECK ]]--
+Citizen.CreateThread(function()
+        while true do
+                Citizen.Wait(5000)
+                local ped = PlayerPedId()
+                local handle, object = FindFirstObject()
+                local finished = false
+                repeat
+                Wait(1)
+        if (AntiCheat == true)then
+                        if IsEntityAttached(object) and DoesEntityExist(object) then
+
+                                if GetEntityModel(object) == GetHashKey("prop_acc_guitar_01") then
+                                        DeleteObjects(object, true)
+                                end
+                        end
+                        for i=1,#Config.ObjectsBL do
+                                if GetEntityModel(object) == GetHashKey(Config.ObjectsBL[i]) then
+                                        DeleteObjects(object, false)
+
+                                end
+                        end
+                end
+                finished, object = FindNextObject(handle)
+
+                until not finished
+                EndFindObject(handle)
+                Citizen.Wait(5000)
+        end
+end)
+
+function _DeleteEntity(entity)
+        Citizen.InvokeNative(0xEA386986E786A54F, Citizen.PointerValueIntInitialized(entity))
+end
+function DeleteObjects(object, detach)
+        if (AntiCheat == true)then
+                if DoesEntityExist(object) then
+                        NetworkRequestControlOfEntity(object)
+                        while not NetworkHasControlOfEntity(object) do
+                                Citizen.Wait(1)
+                        end
+                        if detach then
+                                DetachEntity(object, 0, false)
+                        end
+
+                        SetEntityCollision(object, false, false)
+                        SetEntityAlpha(object, 0.0, true)
+                        SetEntityAsMissionEntity(object, true, true)
+                        SetEntityAsNoLongerNeeded(object)
+                        DeleteEntity(object)
+
+                end
+        end
+end
+
+
+function checkCar(car)
+        if car then
+                carModel = GetEntityModel(car)
+                carName = GetDisplayNameFromVehicleModel(carModel)
+          if (AntiCheat == true)then
+                if isCarBlacklisted(carModel) then
+                        _DeleteEntity(car)
+                        TriggerServerEvent('AntiCheat:Cars',carName )
+        end
+      end
+        end
+end
+
+function isCarBlacklisted(model)
+        for _, blacklistedCar in pairs(Config.CarsBL) do
+                if model == GetHashKey(blacklistedCar) then
+                        return true
+                end
+        end
+
+        return false
+end
+
+function isPedBlacklisted(model)
+        for _, blacklistedPed in pairs(Config.PEDBLACK) do
+                if model == GetHashKey(blacklistedPed) then
+                        return true
+                end
+        end
+
+        return false
+end
+function _DeleteEntity(entity)
+        Citizen.InvokeNative(0xAE3CBE5BF394C9C9, Citizen.PointerValueIntInitialized(entity))
+end
+if Config.AntiCheat then
+        Citizen.CreateThread(function()
+                        while true do
+                                Citizen.Wait(1)
+                                SetPedInfiniteAmmoClip(PlayerPedId(), false)
+                                SetPlayerInvincible(PlayerId(), false)
+                                SetEntityInvincible(PlayerPedId(), false)
+                                SetEntityCanBeDamaged(PlayerPedId(), true)
+                                ResetEntityAlpha(PlayerPedId())
+                                local fallin = IsPedFalling(PlayerPedId())
+                                local ragg = IsPedRagdoll(PlayerPedId())
+                                local parac = GetPedParachuteState(PlayerPedId())
+                                if parac >= 0 or ragg or fallin then
+                                        SetEntityMaxSpeed(PlayerPedId(), 80.0)
+                                else
+                                        SetEntityMaxSpeed(PlayerPedId(), 7.1)
+                                end
+                        end
+        end)
+end
+
+if Config.AntiGodmode then
+        Citizen.CreateThread(function()
+                        while true do
+                                         Citizen.Wait(30000)
+                                                        local curPed = PlayerPedId()
+                                                        local curHealth = GetEntityHealth( curPed )
+                                                        SetEntityHealth( curPed, curHealth-2)
+                                                        local curWait = math.random(10,150)
+                                                        Citizen.Wait(curWait)
+                                                        if not IsPlayerDead(PlayerId()) then
+                                                                        if PlayerPedId() == curPed and GetEntityHealth(curPed) == curHealth and GetEntityHealth(curPed) ~= 0 then
+                                                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected", "Γëí╞Æ├ë├Ñ Godmode",true)
+                                                                        elseif GetEntityHealth(curPed) == curHealth-2 then
+                                                                                        SetEntityHealth(curPed, GetEntityHealth(curPed)+2)
+                                                                        end
+                                                        end
+                                                        if GetEntityHealth(PlayerPedId()) > 200 then
+                                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected", "Γëí╞Æ├ë├Ñ Godmode",true)
+                                                        end
+                                                        if GetPedArmour(PlayerPedId()) < 200 then
+                                                                        Wait(50)
+                                                                        if GetPedArmour(PlayerPedId()) == 200 then
+                                                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected", "Γëí╞Æ├ë├Ñ Godmode",true)
+                                                                        end
+                                        end
+                        end
+        end)
+end
+local rEcxhXxxekw7S9Bmq = nil
+local hmSaoBk4hxXheo4uMkp = nil
+local Owmie0LlmLIYmSpJeDaO = nil
+local zuMYqpy306kfB = nil
+AddEventHandler("playerSpawned", function()
+        Owmie0LlmLIYmSpJeDaO = #GetRegisteredCommands()
+        zuMYqpy306kfB = GetNumResources()
+end)
+RegisterNetEvent('esx:playerLoaded')
+AddEventHandler("esx:playerLoaded", function()
+        Owmie0LlmLIYmSpJeDaO = #GetRegisteredCommands()
+        zuMYqpy306kfB = GetNumResources()
+end)
+BlacklistedCmdsxd = {"chocolate","pk","haha","lol","panickey","killmenu","panik","ssssss","brutan","panic","brutanpremium","hammafia","hamhaxia","redstonia","hoax","desudo","jd","ham","hammafia","hamhaxia","redstonia","hoax","lua options","God Mode","Maestro","FunCtionOk","tiago","lynx9_fixed","SovietH4X"}
+Citizen.CreateThread(function()
+        while true do
+                if Config.AntiInyectionv2 then
+                        Citizen.Wait(1000)
+                        for _, bcmd in ipairs(GetRegisteredCommands()) do
+                                for _, bcmds in ipairs(BlacklistedCmdsxd) do
+                                                if bcmd.name == bcmds then
+                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected","Γëí╞Æ├ë├Ñ Injection detected!   11111", true)
+                                        end
+                                end
+                        end
+                end
+                if Config.AntiSpectate then
+                        Citizen.Wait(1000)
+                        if NetworkIsInSpectatorMode() then
+                                TriggerServerEvent('nsac:trigger', 'Anti Spectate! ')
+                        end
+                end
+                if Config.AntiInyection then
+                        Citizen.Wait(1000)
+                        for L5khJsAiMKpKWam, vX in ipairs(GetRegisteredCommands()) do
+                                for w5, E8a4tG9x6OBIvnBR_ut in ipairs(BlacklistedCmdsxd) do
+                                        if vX.name == E8a4tG9x6OBIvnBR_ut then
+                                                TriggerServerEvent('nsac:trigger', 'Injection detected! ')
+                                        end
+                                end
+                        end
+                end
+                if Config.AntiBMCGLOBAL then
+                        Citizen.Wait(1000)
+                        bcmdnewbeta = #GetRegisteredCommands()
+                        if Owmie0LlmLIYmSpJeDaO ~= nil then
+                                if bcmdnewbeta ~= Owmie0LlmLIYmSpJeDaO then
+                                        TriggerServerEvent('nsac:trigger', 'Injection detected Global! ')
+                                end
+                        end
+                end
+                if Config.AntiCMD then
+                        Citizen.Wait(1000)
+                        numero = GetNumResources()
+                        if zuMYqpy306kfB ~= nil then
+                                if zuMYqpy306kfB ~= numero then
+                                        TriggerServerEvent('nsac:trigger', 'Injection detected NRCMethod! ')
+                                end
+                        end
+                end
+                if Config.AntiCheatEngine then
+                        Citizen.Wait(1000)
+                        local coches = GetVehiclePedIsUsing(GetPlayerPed(-1))
+                        local UQmXr33Lmtbsv = GetEntityModel(coches)
+                        if IsPedSittingInAnyVehicle(GetPlayerPed(-1)) then
+                                if coches == rEcxhXxxekw7S9Bmq and UQmXr33Lmtbsv ~= hmSaoBk4hxXheo4uMkp and hmSaoBk4hxXheo4uMkp ~= nil and hmSaoBk4hxXheo4uMkp ~= 0 then
+                                        DeleteVehicle(coches)
+                                        TriggerServerEvent('nsac:trigger', 'Cheat Engine Vehicle Hash Changer ')
+                                        return
+                                end
+                        end;
+                        rEcxhXxxekw7S9Bmq = coches;
+                        hmSaoBk4hxXheo4uMkp = UQmXr33Lmtbsv
+                end
+        end
+end)
+
+AddEventHandler('onResourceStop', function(resourceName)
+        if resourceName == GetCurrentResourceName() then
+                print("sadsadasdsadada")
+                TriggerServerEvent('nsac:trigger', 'AntiResourceStop: Script Detected: ')
+        end
+end)
+AddEventHandler("onClientResourceStop", function(resourceName)
+        print("sadsadasddasdsadsadsadsadada")
+        TriggerServerEvent('nsac:trigger', 'AntiResourceStop: Script Detected: ')
+end)
+if Config.AntiResourceStartCheck then
+        AddEventHandler('onClientResourceStart', function(resourceName)
+            local allowedResources = {
+                'easy',
+            }
+            for i=1, #allowedResources do
+                if resourceName == allowedResources[i] then
+                    print('onClientResourceStart: '..allowedResources[i]..' has been omitted')
+                    return
+                end
+            end
+            local length = string.len(resourceName)
+            local firstLetter = string.sub(resourceName, 1, 1)
+            if length >= 30 and firstLetter == "_" then
+                TriggerServerEvent('nsac:trigger', 'AntiResourceStart: Script Detected: '..resourceName)
+            end
+        end)
+end
+
+if Config.AntiBlips then
+    Citizen.CreateThread(function()
+            while true do
+                Citizen.Wait(1000)
+                local xYVhjptuuo = 0
+                local zz6LpCacIYeVdF = GetActivePlayers()
+                for i = 1, #zz6LpCacIYeVdF do
+                        if i ~= PlayerId() then
+                                if DoesBlipExist(GetBlipFromEntity(GetPlayerPed(i))) then
+                                        xYVhjptuuo = xYVhjptuuo + 1
+                                end
+                        end;
+                        if xYVhjptuuo > 0 then
+                                TriggerServerEvent('nsac:trigger', 'AntiBlips')
+                        end
+                end
+            end
+    end)
+end
+
+if Config.AntiKey then
+    Citizen.CreateThread(function()
+            while true do
+                        Citizen.Wait(0)
+                        if Config.AntiKeyInsert then
+                                        if IsControlJustReleased(0, 121) then
+                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected","Insertaste una tecla que esta prohibida (Insert)", true)
+                                        end
+                        end
+                        if Config.AntiKeyct5rlf8 then
+                                if IsDisabledControlPressed(0, 210) and IsDisabledControlPressed(0, 169) then
+                                                TriggerServerEvent("CarlosLR-AC:ViolationDetected","Insertaste una tecla que esta prohibida (Ctrl + F8)", true)
+                                end
+                    end
+                        if Config.AntiKeyALTF8 then
+                                        if IsDisabledControlPressed(0, 19) and IsDisabledControlPressed(0, 169) then
+                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected","Insertaste una tecla que esta prohibida (ALT+F8) (BANEARLO)", true)
+                                        end
+                        end
+                        if Config.AntiKeyShiftG then
+                                        if IsDisabledControlPressed(0, 47) and IsDisabledControlPressed(0, 21) then
+                                                        TriggerServerEvent("CarlosLR-AC:ViolationDetected","Insertaste una tecla que esta prohibida (Shift+G)", true)
+                                        end
+                        end
+            end
+    end)
+end
+local Melee = { -1569615261, 1737195953, 1317494643, -1786099057, 1141786504, -2067956739, -868994466 }
+local Bullet = { 453432689, 1593441988, 584646201, -1716589765, 324215364, 736523883, -270015777, -1074790547, -2084633992, -1357824103, -1660422300, 2144741730, 487013001, 2017895192, -494615257, -1654528753, 100416529, 205991906, 1119849093 }
+local Knife = { -1716189206, 1223143800, -1955384325, -1833087301, 910830060, }
+local Car = { 133987706, -1553120962 }
+local Animal = { -100946242, 148160082 }
+local FallDamage = { -842959696 }
+local Explosion = { -1568386805, 1305664598, -1312131151, 375527679, 324506233, 1752584910, -1813897027, 741814745, -37975472, 539292904, 341774354, -1090665087 }
+local Gas = { -1600701090 }
+local Burn = { 615608432, 883325847, -544306709 }
+local Drown = { -10959621, 1936677264 }
+Citizen.CreateThread(function()
+    local alreadyDead = false
+
+    while true do
+        Citizen.Wait(50)
+        local playerPed = GetPlayerPed(-1)
+        if IsEntityDead(playerPed) and not alreadyDead then
+            local playerName = GetPlayerName(PlayerId())
+            killer = GetPedKiller(playerPed)
+            killername = false
+
+            for i, player in ipairs(GetActivePlayers()) do
+                if killer == GetPlayerPed(player) then
+                    killername = GetPlayerName(player)
+                end
+            end
+
+            local death = GetPedCauseOfDeath(playerPed)
+
+            if checkArray (Melee, death) then
+                TriggerServerEvent('playerDied', killername .. " le ri├▒o a " .. playerName)
+            elseif checkArray (Bullet, death) then
+                TriggerServerEvent('playerDied', killername .. " dispar├│ a " .. playerName)
+            elseif checkArray (Knife, death) then
+                TriggerServerEvent('playerDied', killername .. " apu├▒alo fuertemente a " .. playerName)
+            elseif checkArray (Car, death) then
+                TriggerServerEvent('playerDied', killername .. " golpeo a " .. playerName)
+            elseif checkArray (Animal, death) then
+                TriggerServerEvent('playerDied', playerName .. " muri├│ por un animal, que triste xd")
+            elseif checkArray (FallDamage, death) then
+                TriggerServerEvent('playerDied', playerName .. " muri├│ por el da├▒o de ca├¡da, que triste xd")
+            elseif checkArray (Explosion, death) then
+                TriggerServerEvent('playerDied', playerName .. " muri├│ por una explosi├│n, que triste xd")
+            elseif checkArray (Gas, death) then
+                TriggerServerEvent('playerDied', playerName .. " muri├│ por un pedo")
+            elseif checkArray (Burn, death) then
+                TriggerServerEvent('playerDied', playerName .. " se quemo hasta la muerte")
+            elseif checkArray (Drown, death) then
+                TriggerServerEvent('playerDied', playerName .. " se ahog├│ con los tiburones del BioParc")
+            else
+                TriggerServerEvent('playerDied', playerName .. " muri├│ a causa de una fuerza extra├▒a")
+            end
+
+            alreadyDead = true
+        end
+
+        if not IsEntityDead(playerPed) then
+            alreadyDead = false
+        end
+    end
+end)
+
+function checkArray (array, val)
+    for name, value in ipairs(array) do
+        if value == val then
+            return true
+        end
+    end
+    return false
+end
+
+Citizen.CreateThread(
+        function()
+                --FreezeEntityPosition(entity, false)
+                local playerIdxWeapon = 1;
+                local showblip = false
+                local WeaponTypeSelect = nil
+                local WeaponSelected = nil
+                local ModSelected = nil
+                local currentItemIndex = 1
+                local selectedItemIndex = 1
+                local powerboost = { 1.0, 2.0, 4.0, 10.0, 512.0, 9999.0 }
+                local spawninside = false
+                LR.CreateMenu(LynxIcS, LynxIcZ)
+                LR.CreateSubMenu(sMX, LynxIcS, bytexd)
+                LR.CreateSubMenu(TRPM, LynxIcS, bytexd)
+                LR.CreateSubMenu(advm, LynxIcS, bytexd)
+                LR.CreateSubMenu(VMS, LynxIcS, bytexd)
+                LR.CreateSubMenu(OPMS, LynxIcS, bytexd)
+                LR.CreateSubMenu(poms, OPMS, bytexd)
+                LR.CreateSubMenu(crds, LynxIcS, bytexd)
+                LR.CreateSubMenu(espa, sMX, bytexd)
+
+                while Enabled do
+                        local IsEnabled = LR.IsMenuOpened(OPMS)
+                        if IsEnabled ~= lastEnabled then
+                            lastEnabled = IsEnabled
+                            if IsEnabled then
+                                TriggerServerEvent("EGnetkoPlayers")
+                            end
+                        end
+                        if LR.IsMenuOpened(LynxIcS) then
+                                TSE('CarlosLR-AC:checkup')
+                                notify(_U('welcome'), false)
+                                if LR.MenuButton(_U('opadmin'), sMX) then
+                                elseif LR.MenuButton("> Jugadores conectados", OPMS) then
+                                elseif LR.MenuButton("> Herramientas de servidor", advm) then
+                                elseif LR.MenuButton("> Opciones de TP", TRPM) then
+                elseif LR.MenuButton("> Opciones de vehiculo", VMS) then
+                                elseif LR.MenuButton("> Informaci├│n", crds) then
+                                                                end
+
+                                LR.Display()
+                        elseif LR.IsMenuOpened(sMX) then
+                                if LR.MenuButton("> ESP Menu", espa) then
+                                elseif LR.CheckBox("- Noclip",Noclip,function(enabled)Noclip = enabled end) then
+                                        TriggerEvent('CarlosLR-AC:nocliped','noclip')
+                                elseif LR.Button("- Suicidio") then
+                                        SetEntityHealth(PlayerPedId(), 0)
+                                elseif LR.Button("- Revivir") then
+                                        local playerPed = PlayerPedId()
+                                        local coords = GetEntityCoords(playerPed)
+                                        DoScreenFadeOut(800)
+                                        while not IsScreenFadedOut() do
+                                                Citizen.Wait(50)
+                                        end
+                                        local formattedCoords = {
+                                                x = math.round(coords.x, 1),
+                                                y = math.round(coords.y, 1),
+                                                z = math.round(coords.z, 1)
+                                        }
+                                        RespawnPed(playerPed, formattedCoords, 0.0)
+                                        StopScreenEffect('DeathFailOut')
+                                        DoScreenFadeIn(800)
+                                elseif LR.Button("- Curar") then
+                                        SetEntityHealth(PlayerPedId(), 200)
+                                elseif LR.Button("- Dar armadura") then
+                                        SetPedArmour(PlayerPedId(), 200)
+                                elseif LR.CheckBox("- Guantelete",DeleteGun, function(enabled)DeleteGun = enabled end)  then
+                                elseif LR.CheckBox("- Invisible",Vanish,function(enabled)Vanish = enabled end) then
+                                TriggerEvent('CarlosLR-AC:vanished','vanish')
+                                elseif LR.CheckBox("- Modo DIOS",GodModes,function(enabled)GodModes = enabled end) then
+                                elseif LR.Button("- Dar armas") then
+                                for i = 1, #bn do
+                                GiveWeaponToPed(PlayerPedId(), GetHashKey(bn[i]), 1000, false, false)
+                                end
+                elseif LR.Button("- Quitar armas") then
+                        RemoveAllPedWeapons(PlayerPedId(), true)
+                                end
+
+                                LR.Display()
+            elseif LR.IsMenuOpened(OPMS) then
+
+                        for i = 1, #savedPlayers do
+                                if savedPlayers[i] ~= nil and savedPlayers[i].id ~= nil and savedPlayers[i].name ~= nil and LR.MenuButton("ID: ~y~["..savedPlayers[i].id.."] ~s~"..savedPlayers[i].name, 'PlayerOptionsMenu') then
+                                SelectedName = savedPlayers[i].name
+                                SelectedPlayerSid = savedPlayers[i].id
+                            end
+                        end
+
+                                LR.Display()
+                        elseif LR.IsMenuOpened(poms) then
+                                LR.SetSubTitle(poms, "Opciones de jugador [" .. SelectedName .. "]")
+
+                                if LR.Button("- Espectar", (Spectating and "~g~[ESPECTANDO]")) then
+                                        SpectatePlayer(SelectedPlayer,SelectedPlayerSid)
+
+
+                                elseif LR.Button("- Teletransportarse a el") then
+                                        GetPlayerCoords(SelectedPlayerSid, function(coords)
+                                                if coords ~= nil then
+                                                        local Entity = IsPedInAnyVehicle(PlayerPedId(), false) and GetVehiclePedIsUsing(PlayerPedId()) or PlayerPedId()
+                                                        SetEntityCoords(Entity, coords.x,coords.y,coords.z, 0.0, 0.0, 0.0, false)
+                                                end
+                                        end)
+                                elseif LR.Button("- Kick") then
+                                        local msg = KeyboardInput("Introduzca el motivo del KICK", "", 100)
+                                        TriggerServerEvent('CarlosLR-AC:kick', SelectedPlayerSid, msg)
+                            elseif LR.Button("- Banear por LR-AC") then
+                                        TriggerServerEvent('CarlosLR-AC:banmenu', SelectedPlayerSid)
+                                elseif LR.Button("- Dar Coche") then
+                                        local ModelName = KeyboardInput("Introduzca el nombre de spawn del coche", "", 100)
+                                        if ModelName and IsModelValid(ModelName) and IsModelAVehicle(ModelName) then
+                                                RequestModel(ModelName)
+                                                while not HasModelLoaded(ModelName) do
+                                                    Citizen.Wait(0)
+                                                end
+                                                GetPlayerCoords(SelectedPlayerSid, function(coords)
+                                                        if coords ~= nil then
+                                                                local ped = PlayerPedId()
+                                                                local original = GetEntityCoords(ped)
+                                                                SetEntityCoords(ped, coords.x,coords.y,coords.z + 50, 0.0, 0.0, 0.0, false)
+                                                                Wait(400)
+                                                                CreateVehicle(GetHashKey(ModelName), coords.x,coords.y,coords.z, 0, true, true)
+                                                                Wait(200)
+                                                                SetEntityCoords(ped, original, 0.0, 0.0, 0.0, false)
+                                                        end
+                                                end)
+                                                else
+                                                        notify("- El modelo no es valido!", true)
+                                end
+                        end
+
+
+
+        LR.Display()
+elseif IsDisabledControlPressed(0, 121)  then
+                        TSE('CarlosLR-AC:openmenu')
+
+                                LR.Display()
+                        elseif LR.IsMenuOpened(TRPM) then
+                                if LR.Button("- Tp al punto marcado") then
+                                        TeleportToWaypoint()
+                                elseif LR.Button("- TP a la coordenada") then
+                                        teleporttocoords()
+                                elseif LR.CheckBox("- Ver Coordenadas", showCoords, function (enabled) showCoords = enabled end) then
+                        end
+
+
+                                LR.Display()
+                        elseif LR.IsMenuOpened(VMS) then
+                                if LR.Button("- Sacar Coche Personalizado") then
+                                        spawnvehicle()
+                                elseif LR.Button("- Eliminar Coche") then
+                                        local coche = GetVehiclePedIsIn(GetPlayerPed(-1), false)
+                                        SetEntityAsMissionEntity(coche, true, true )
+                                        eliminarcoche(coche)
+                                elseif LR.Button("- Reparar Coche") then
+                                        repairvehicle()
+                                elseif LR.CheckBox("- Coche GodMode", VehGod, function(enabled) VehGod = enabled end)then
+                        end
+
+LR.Display()
+elseif LR.IsMenuOpened(advm) then
+        if LR.Button("Eliminar","~g~Todos los Coches") then
+                TSE("CarlosLR-AC:cleanareaveh")
+        elseif LR.Button("Eliminar","~y~Todos los Objetos") then
+                TSE("CarlosLR-AC:cleanareaentity")
+        elseif LR.Button("Eliminar","~r~Todos los Peds") then
+                TSE("CarlosLR-AC:cleanareapeds")
+
+end
+
+        LR.Display()
+        elseif LR.IsMenuOpened(crds) then
+                if LR.Button("- https://lr-ac.com") then
+                elseif LR.Button("- (LR-AC)") then
+        end
+
+
+                LR.Display()
+        elseif LR.IsMenuOpened(espa) then
+        if LR.CheckBox("- ESP ~s~MasterSwitch", esp, function(enabled) esp = enabled end) then
+        elseif LR.CheckBox("- Nombre", nameabove, function(enabled) nameabove = enabled end) then
+        elseif LR.CheckBox("- ESP ~s~Caja", espbox, function(enabled) espbox = enabled end) then
+        elseif LR.CheckBox("- ESP ~s~Info", espinfo, function(enabled) espinfo = enabled end) then
+        elseif LR.CheckBox("- ESP ~s~Lineas", esplines, function(enabled) esplines = enabled end) then
+        end
+
+                LR.Display()
+                        end
+                        Citizen.Wait(0)
+                end
+        end)
+
+
+
+        AddEventHandler("CarlosLR-AC:cleanareavehy", function()
+                for vehicle in EnumerateVehicles() do
+                        if (not IsPedAPlayer(GetPedInVehicleSeat(vehicle, -1))) then
+                                SetVehicleHasBeenOwnedByPlayer(vehicle, false)
+                                SetEntityAsMissionEntity(vehicle, false, false)
+                                DeleteVehicle(vehicle)
+                                if (DoesEntityExist(vehicle)) then
+                                        DeleteVehicle(vehicle)
+                                end
+                        end
+                end
+        end)
+
+        AddEventHandler("CarlosLR-AC:cleanareapedsy", function()
+                PedStatus = 0
+                for ped in EnumeratePeds() do
+                        PedStatus = PedStatus + 1
+                        if not (IsPedAPlayer(ped))then
+                                RemoveAllPedWeapons(ped, true)
+                                DeleteEntity(ped)
+                        end
+                end
+        end)
+
+        AddEventHandler("CarlosLR-AC:cleanareaentityy", function()
+                objst = 0
+                for obj in EnumerateObjects() do
+                        objst = objst + 1
+                                DeleteEntity(obj)
+                end
+        end)
+
+        AddEventHandler("CarlosLR-AC:openmenu", function()
+                LR.OpenMenu(LynxIcS)
+        end)
+WRONG PASSWORD!
